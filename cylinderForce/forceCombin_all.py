@@ -2,56 +2,74 @@ import os
 import numpy as np
 import linecache
 
-def readAndWriteForceData(dataSavePath,forceFile,timeDir):
-    forceData = np.loadtxt(forceFile[0], comments='#')
+def tryReadData(forceFile):
+    readed = False
+    data = list()
+    while not readed:
+       try:
+            data = np.loadtxt(forceFile, comments='#')
+            readed = True
+       except ValueError:
+            os.system(r"sed -i '$d' %s" % (forceFile))
 
-    if len(timeDir) > 1:
-        time = forceData[:,0]
-        forceData = forceData[np.where(time<=timeDir[1])]
+    return (data)
 
-        for i in range(len(timeDir)):
-            file = forceFile[i]
-            data = np.loadtxt(file, comments='#')
-            if i > 0 and i < len(timeDir)-1:
-                time = data[:,0]
-                forceData = np.vstack((forceData,data[np.where(time<=timeDir[i+1])]))
-            elif i == len(timeDir)-1:
-                forceData = np.vstack((forceData,data))
+def writeData(dataSavePath,forceFile,timeDir):
+    forceData = list()
 
-    np.savetxt(dataSavePath,forceData,delimiter="\t",fmt='%.9f')
+    if timeDir:
+        forceData = tryReadData(forceFile[0])
 
-def readAndWriteFileTitle(titleSavePath,forceFile,titleNum):
+        if len(timeDir) > 1:
+            time = forceData[:,0]
+            forceData = forceData[np.where(time<=timeDir[1])]
+
+            for i in range(len(timeDir)):
+                file = forceFile[i]
+
+                if i > 0 and i < len(timeDir)-1:
+                    data = tryReadData(file)
+                    time = data[:,0]
+                    forceData = np.vstack((forceData,data[np.where(time<=timeDir[i+1])]))
+                elif i == len(timeDir)-1:
+                    data = tryReadData(file)
+                    forceData = np.vstack((forceData,data))
+
+    np.savetxt(dataSavePath,forceData,delimiter="\t",fmt='%.6f')
+
+def readAndWriteTitle(titleSavePath,forceFile,titleNum):
     lines = linecache.getlines(forceFile)[0:titleNum]
 
     with open(titleSavePath,'w') as f:
         for line in lines:
             f.write(line)
 
-def findForceFile(dirPath,titleNum):
+def findForceFile(dirPath,bin):
     forceFile = list()
     timeDir = list()
 
     for dir in os.listdir(dirPath):
         currentPath = os.path.join(dirPath,dir)
         if os.path.isdir(currentPath):
-            timeDir.append(float(dir))
             forceEachDir = list()
             for file in os.listdir(currentPath):
                 if "force" in file:
-                    if titleNum == 4:
-                        if "Bin" not in file:
-                            forceEachDir.append(file)
-                    elif titleNum > 4:
+                    if bin:
                         if "Bin" in file:
                             forceEachDir.append(file)
+                    else:
+                        if "Bin" not in file:
+                            forceEachDir.append(file)
 
-            if len(forceEachDir) > 1:
-                fileSize = list()
-                for i in range(len(forceEachDir)):
-                    fileSize.append(os.path.getsize(os.path.join(currentPath,forceEachDir[i])))
-                forceFile.append(os.path.join(currentPath,forceEachDir[fileSize.index(max(fileSize))]))
-            else:
-                forceFile.append(os.path.join(currentPath,forceEachDir[0]))
+            if forceEachDir:
+                timeDir.append(float(dir))
+                if len(forceEachDir) > 1:
+                    fileSize = list()
+                    for i in range(len(forceEachDir)):
+                        fileSize.append(os.path.getsize(os.path.join(currentPath,forceEachDir[i])))
+                    forceFile.append(os.path.join(currentPath,forceEachDir[fileSize.index(max(fileSize))]))
+                else:
+                    forceFile.append(os.path.join(currentPath,forceEachDir[0]))
 
     forceFile = sorted(forceFile,key=lambda x: timeDir[forceFile.index(x)])
     timeDir.sort()
@@ -63,16 +81,26 @@ def findForceFile(dirPath,titleNum):
 
 if __name__ == '__main__':
     pwdRoot = os.getcwd()
-    titleNum = 4
 
-    dirPath = os.path.join(pwdRoot, '062/forces')
-    dataSavePath = os.path.join(dirPath,"force.dat")
-    titleSavePath = os.path.join(dirPath,"title.dat")
+    bin = False
+    dirPath = os.path.join(pwdRoot, '072/forces')
 
-    [forceFile, timeDir] = findForceFile(dirPath,titleNum)
+    if bin:
+        titleNum = 11
+        forceFileName = "forceBin.dat"
+        titleFileName = "forceBinTitle.dat"
+    else:
+        titleNum = 4
+        forceFileName = "force.dat"
+        titleFileName = "forceTitle.dat"
+
+    dataSavePath = os.path.join(dirPath,forceFileName)
+    titleSavePath = os.path.join(dirPath,titleFileName)
+
+    [forceFile, timeDir] = findForceFile(dirPath,bin)
 
     for file in forceFile:
         os.system(r'sed -i "s/(/ /g;s/)/ /g" %s' % (file))
 
-    readAndWriteFileTitle(titleSavePath,forceFile[0],titleNum)
-    readAndWriteForceData(dataSavePath,forceFile,timeDir)
+    readAndWriteTitle(titleSavePath,forceFile[0],titleNum)
+    writeData(dataSavePath,forceFile,timeDir)
