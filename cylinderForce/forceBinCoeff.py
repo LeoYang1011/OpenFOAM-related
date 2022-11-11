@@ -1,10 +1,33 @@
 import csv
 import os
+import re
 import numpy as np
 import linecache
+import matplotlib.pyplot as plt
+from scipy import signal
 
-def writeFile(binLocate, time, cdxBin, cdyBin, cdzBin, cdxMeanBin, cdyMeanBin, cdzMeanBin,cdxName,cdyName,cdzName,meanName):
-    meanTitle = ["height(m)","cdxMean","cdyMean","cdzMean"]
+def writeBinData2Tecplot(binLocate, time, cdxBin, cdyBin, cdzBin, tecName):
+
+    with open(tecName,'w') as f:
+        f.write('TITLE     = "Force bin"\n')
+        f.write('Variables = "time","Z/D","cdx","cdy","cdz"\n\n')
+        f.write('ZONE I=' + str(len(time)) + ', J=' + str(len(binLocate)) + ' F=POINT\n')
+        f.write('DT=(SINGLE SINGLE SINGLE SINGLE SINGLE )\n')
+
+        for j in range(len(binLocate)):
+            locatej = '{:.9E}'.format(binLocate[j])
+            for i in range(len(time)):
+                timei = '{:.9E}'.format(time[i])
+                cdxij = '{:.9E}'.format(cdxBin[i,j])
+                cdyij = '{:.9E}'.format(cdyBin[i,j])
+                cdzij = '{:.9E}'.format(cdzBin[i,j])
+                f.write(str(timei) + ' ' + str(locatej) + ' ')
+                f.write(str(cdxij) + ' ' + str(cdyij) + ' ' + str(cdzij))
+                f.write('\n')
+
+def writeBinData2CSV(binLocate, time, cdxBin, cdyBin, cdzBin, cdxMeanBin, cdyMeanBin, cdzMeanBin,cdxName,cdyName,cdzName,meanName):
+
+    meanTitle = ["locate(m)","cdxMean","cdyMean","cdzMean"]
     with open(meanName, "w", newline='') as f:
         writer = csv.writer(f)
         writer.writerow(meanTitle)
@@ -12,34 +35,34 @@ def writeFile(binLocate, time, cdxBin, cdyBin, cdzBin, cdxMeanBin, cdyMeanBin, c
             meanData = [binLocate[i],str(cdxMeanBin[i]),str(cdyMeanBin[i]),str(cdzMeanBin[i])]
             writer.writerow(meanData)
 
-    first = ["height(m)"," "]
-    first.extend(list(time))
+    first = [" "]
+    first.extend(list(binLocate))
 
     with open(cdxName, "w", newline='') as f:
         writer = csv.writer(f)
         writer.writerow(first)
-        for i in range(len(binLocate)):
-            row = [binLocate[i]," "]
+        for i in range(len(time)):
+            row = [time[i]]
             row.extend(list(cdxBin[i,:]))
             writer.writerow(row)
 
     with open(cdyName, "w", newline='') as f:
         writer = csv.writer(f)
         writer.writerow(first)
-        for i in range(len(binLocate)):
-            row = [binLocate[i]," "]
+        for i in range(len(time)):
+            row = [time[i]]
             row.extend(list(cdyBin[i,:]))
             writer.writerow(row)
 
     with open(cdzName, "w", newline='') as f:
         writer = csv.writer(f)
         writer.writerow(first)
-        for i in range(len(binLocate)):
-            row = [binLocate[i]," "]
+        for i in range(len(time)):
+            row = [time[i]]
             row.extend(list(cdzBin[i,:]))
             writer.writerow(row)
 
-def calcCDxyz(binData,UInf,SpLength,D,binNum):
+def calcCDxyz(binData,UInf,SpLength,D,rho):
     cdx = list()
     cdy = list()
     cdz = list()
@@ -49,23 +72,65 @@ def calcCDxyz(binData,UInf,SpLength,D,binNum):
     forceZ = binData[:,2]
 
     for i in range(len(forceX)):
-        cdxi = -2 * forceX[i] / (UInf ** 2 * SpLength/binNum * D * 1000)
-        cdyi =  2 * forceY[i] / (UInf ** 2 * SpLength/binNum * D * 1000)
-        cdzi =  2 * forceZ[i] / (UInf ** 2 * SpLength/binNum * D * 1000)
+        cdxi =  2 * forceX[i] / (UInf ** 2 * SpLength * D * rho)
+        cdyi =  2 * forceY[i] / (UInf ** 2 * SpLength * D * rho)
+        cdzi =  2 * forceZ[i] / (UInf ** 2 * SpLength * D * rho)
         cdx.append(cdxi)
         cdy.append(cdyi)
         cdz.append(cdzi)
 
     return (cdx,cdy,cdz)
 
-def readBinLocate(inputName):
+def calcBinCdxyz(binNum, data, UInf, SpLength, D, rho):
+    cdxBin = np.zeros((len(time),binNum))
+    cdyBin = np.zeros((len(time),binNum))
+    cdzBin = np.zeros((len(time),binNum))
+    cdxMeanBin = np.zeros(binNum)
+    cdyMeanBin = np.zeros(binNum)
+    cdzMeanBin = np.zeros(binNum)
 
-    binLocate = linecache.getline(inputName,9)
-    binLocate = binLocate.rstrip('\n')
-    binLocate = binLocate.split("\t")
-    del(binLocate[0])
+    for i in range(binNum):
+        j = 9*i
+        binData = data[:,j:j+3]
+        [cdx, cdy, cdz] = calcCDxyz(binData, UInf, SpLength, D, rho)
+        cdxBin[:,i] = cdx
+        cdyBin[:,i] = cdy
+        cdzBin[:,i] = cdz
+        cdxMeanBin[i] = np.mean(cdx)
+        cdyMeanBin[i] = np.mean(cdy)
+        cdzMeanBin[i] = np.mean(cdz)
 
-    return (binLocate)
+    return (cdxBin,cdyBin,cdzBin,cdxMeanBin,cdyMeanBin,cdzMeanBin)
+
+def readBinLocate(inputTitle):
+
+    binNum = linecache.getline(inputTitle,2)
+    binNum = re.findall(r'\d+',binNum)
+    binNum = eval(binNum[0])
+    print("bins   : "+ str(binNum))
+
+    binStart = linecache.getline(inputTitle,3)
+    binStart = re.findall(r'[\\+|-]?\d+\.\d+[Ee][\\+|-]\d+',binStart)
+    binStart = eval(binStart[0])
+    print("start  : " + str(binStart))
+
+    binDelta = linecache.getline(inputTitle,5)
+    binDelta = re.findall(r'[\\+|-]?\d+\.\d+[Ee][\\+|-]\d+',binDelta)
+    binDelta = eval(binDelta[0])
+    print("delta  : " + str(binDelta))
+
+    binDir = linecache.getline(inputTitle,6)
+    binDir = re.findall(r'[\\+|-]?\d+\.\d+[Ee][\\+|-]\d+',binDir)
+    for i in range(len(binDir)):
+        binDir[i] = eval(binDir[i])
+    binDir = np.array(binDir)
+    print("binDir : " + "( " + str(binDir[0]) + " " + str(binDir[1]) + " " + str(binDir[2])+ " )")
+
+    binCenter = np.zeros(shape=(binNum,3))
+    for i in range(binNum):
+        binCenter[i] = (binStart + (i + 0.5)*binDelta)*binDir
+
+    return (binNum,binCenter,binDir)
 
 def readData(inputName,startTime,endTime):
 
@@ -91,41 +156,52 @@ def readData(inputName,startTime,endTime):
 
     return (time,data)
 
+
+def medfiltCDxyz(data,n):
+    dataShape = data.shape
+    filtData  = np.zeros(shape=dataShape)
+
+    for i in range(dataShape[1]):
+        filtData[:,i]  = signal.medfilt(data[:,i], n)
+
+    return (filtData)
+
 if __name__ == '__main__':
     pwd_root = os.getcwd()
-    D = 2.3         #圆柱直径
-    UInf = 0.4     #入流速度
-    SpLength = 10   #圆柱长度
-    startTime = 40
-    endTime = 140
-    binNum = 20
+    D = 1.0         #圆柱直径
+    UInf = 1.0     #入流速度
+    SpLength = 4   #圆柱长度
+    rho = 1.0
+    startTime = 201
+    endTime = 300
 
-    dir_path = os.path.join(pwd_root, 'forces36\\23')
-    inputName = os.path.join(dir_path, 'forceBin.dat')
-    cdxName = os.path.join(dir_path, 'cdx.csv')
-    cdyName = os.path.join(dir_path, 'cdy.csv')
-    cdzName = os.path.join(dir_path, 'cdz.csv')
-    meanName = os.path.join(dir_path, 'mean.csv')
+    dirPath = os.path.join(pwd_root, '072/forces')
 
-    binLocate = readBinLocate(inputName)
-    [time,data] = readData(inputName,startTime,endTime)
+    inputData = os.path.join(dirPath, 'forceBin.dat')
+    inputTitle = os.path.join(dirPath, 'forceBinTitle.dat')
+    cdxName = os.path.join(dirPath, 'cdxBin.csv')
+    cdyName = os.path.join(dirPath, 'cdyBin.csv')
+    cdzName = os.path.join(dirPath, 'cdzBin.csv')
+    meanName = os.path.join(dirPath, 'meanBin.csv')
+    tecName = os.path.join(dirPath, 'cdxyzBin.dat')
 
-    cdxBin = np.zeros((binNum,len(time)))
-    cdyBin = np.zeros((binNum,len(time)))
-    cdzBin = np.zeros((binNum,len(time)))
-    cdxMeanBin = np.zeros(binNum)
-    cdyMeanBin = np.zeros(binNum)
-    cdzMeanBin = np.zeros(binNum)
+    [binNum,binCenter,binDir] = readBinLocate(inputTitle)
+    [time,data] = readData(inputData,startTime,endTime)
 
-    for i in range(len(binLocate)):
-        j = 3*i
-        binData = data[:,j:j+3]
-        [cdx, cdy, cdz] = calcCDxyz(binData, UInf, SpLength, D, binNum)
-        cdxBin[i,:] = cdx
-        cdyBin[i,:] = cdy
-        cdzBin[i,:] = cdz
-        cdxMeanBin[i] = np.mean(cdx)
-        cdyMeanBin[i] = np.mean(cdy)
-        cdzMeanBin[i] = np.mean(cdz)
+    [cdxBin,cdyBin,cdzBin,cdxMeanBin,cdyMeanBin,cdzMeanBin] = calcBinCdxyz(binNum,data,UInf,SpLength,D,rho)
+    cdxBin = medfiltCDxyz(cdxBin,9)
+    cdyBin = medfiltCDxyz(cdyBin,5)
+    cdzBin = medfiltCDxyz(cdzBin,5)
 
-    writeFile(binLocate, time, cdxBin, cdyBin, cdzBin, cdxMeanBin, cdyMeanBin, cdzMeanBin, cdxName, cdyName, cdzName,meanName)
+    binLocate = np.dot(binCenter,binDir)
+    writeBinData2CSV(binLocate, time, cdxBin, cdyBin, cdzBin, cdxMeanBin, cdyMeanBin, cdzMeanBin, cdxName, cdyName, cdzName,meanName)
+    #writeBinData2Tecplot(binCenter, binDir, time, cdxBin, cdyBin, cdzBin, tecName)
+
+    #binLocate = np.dot(binCenter,binDir)
+    #x,y = np.meshgrid(time,binLocate)
+    #plt.figure()
+    #plt.contourf(x,y,cdyBin.T)
+    # plt.plot(time,cdyBin[:,10])
+    # plt.plot(time,cdyBin[:,20])
+    # plt.plot(time,cdyBin[:,30])
+    #plt.show()
