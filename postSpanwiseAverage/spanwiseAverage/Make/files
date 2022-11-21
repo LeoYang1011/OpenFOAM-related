@@ -1,0 +1,3 @@
+spanwiseAverage.C
+
+LIB = $(FOAM_USER_LIBBIN)/libspanwiseAverage
