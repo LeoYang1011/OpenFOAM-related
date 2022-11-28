@@ -67,39 +67,85 @@ void Foam::spanwiseAverage::spanwiseAverageField
         }
         fieldType& res = *resPtr;
 
-        if (globalFaces_().empty())
+	    if (includeInternal_)
         {
-            return;
+
+            Info << "Averaging of the field: " << fld.name() << " on internal mesh." << endl; 
+            
+            const meshStructure& ms = meshAddressing(fld.mesh());
+
+     	    if (globalFaces_().empty())
+            {
+                return;
+            }
+
+            const labelList& cellToPatchFace = ms.cellToPatchFaceAddressing();
+
+            Field<Type> regionField(globalFaces_().size(), Zero);
+            labelList regionCount(globalFaces_().size(), 0);
+
+            forAll(cellToPatchFace, celli)
+            {
+                const label regioni = cellToPatchFace[celli];
+                regionField[regioni] += fld[celli];
+                regionCount[regioni]++;
+            }
+
+            forAll(regionField, regioni)
+            {
+                regionField[regioni] /= regionCount[regioni];
+            }
+
+            // And send result back
+            forAll(cellToPatchFace, celli)
+            {
+                const label regioni = cellToPatchFace[celli];
+                res[celli] = regionField[regioni];
+            }
+
+	        res.correctBoundaryConditions();
         }
 
-        const labelList& cellToPatchFace = meshStructurePtr_->cellToPatchFaceAddressing();
+	    if (includePatches_)
+	    {
+            forAll(fld.boundaryField(),patchi)
+	        {
 
-        Field<Type> regionField(globalFaces_().size(), Zero);
-        labelList regionCount(globalFaces_().size(), 0);
+		        if (averagePatchesName_.found(fld.mesh().boundaryMesh()[patchi].name()))
+		        {
 
-        forAll(cellToPatchFace, celli)
-        {
-            const label regioni = cellToPatchFace[celli];
-            regionField[regioni] += fld[celli];
-            regionCount[regioni]++;
-        }
+                    Info << "Averaging of the field: " << fld.name() << " on the patch: " 
+                         << fld.mesh().boundaryMesh()[patchi].name() << endl;
 
-        forAll(regionField, regioni)
-        {
-            regionField[regioni] /= regionCount[regioni];
-        }
+                    const labelList& faceToEdge = patchAddressing(fld.mesh().boundaryMesh()[patchi]);
+                    const Field<Type>& fldPatch = fld.boundaryField()[patchi];
+                    Field<Type>& resPatch = res.boundaryFieldRef()[patchi];            		                  
 
-        // And send result back
-        forAll(cellToPatchFace, celli)
-        {
-            const label regioni = cellToPatchFace[celli];
-            res[celli] = regionField[regioni];
-        }
+		            Field<Type> edgeField(patchSideEdgePtr_().size(), Zero);
+                    labelList edgeCount(patchSideEdgePtr_().size(), 0);
 
-	res.correctBoundaryConditions();
+		            forAll(faceToEdge, facei)
+                    {
+                        const label edgei = faceToEdge[facei];
+                        edgeField[edgei] += fldPatch[facei];
+                        edgeCount[edgei]++;
+                    }
 
+                    forAll(edgeField, edgei)
+                    {
+                        edgeField[edgei] /= edgeCount[edgei];
+                    }
+    
+                    // And send result back
+                    forAll(faceToEdge, facei)
+                    {
+                        const label edgei = faceToEdge[facei];
+                        resPatch[facei] = edgeField[edgei];
+                    }
+		        }	
+	        }	    
+	    }
     }
-
 }
 
 

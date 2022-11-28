@@ -58,8 +58,9 @@ SourceFiles
 #ifndef spanwiseAverage_H
 #define spanwiseAverage_H
 
-#include "volFieldsFwd.H"
+#include "volFields.H"
 #include "polyMesh.H"
+#include "primitivePatch.H"
 #include "IOobjectList.H"
 
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
@@ -79,25 +80,35 @@ class spanwiseAverage
     // Private Data
 
         //- Patches on which to collapse the fields (in sorted order)
-	const polyMesh& mesh_;
+	    const polyMesh& mesh_;
 
-	label patchID_;
+        const wordList fieldsName_;
+    	const bool includeInternal_;
+        const bool includePatches_;
+ 
+    	label sidePatchID_;
+        wordList averagePatchesName_;
+        vector averagePatchesDir_;
 
-	wordList fieldsName_;
+        mutable autoPtr<globalIndex> globalFaces_;
+        mutable autoPtr<globalIndex> globalEdges_;
+        mutable autoPtr<globalIndex> globalPoints_;
+        mutable autoPtr<meshStructure> meshStructurePtr_;
 
-        autoPtr<globalIndex> globalFaces_;
-        autoPtr<globalIndex> globalEdges_;
-        autoPtr<globalIndex> globalPoints_;
-        autoPtr<meshStructure> meshStructurePtr_;
+    	mutable autoPtr<labelList> patchFaceToEdgePtr_;
+    	mutable autoPtr<edgeList>  patchSideEdgePtr_;
 
 
     // Private Member Functions
 
         //- Create the column average field name
-        const word averageName(const word& fieldName);
+        const word averageName(const word& fieldName) const;
 
         //- Return the column-based addressing
-        void meshAddressing();
+        const meshStructure& meshAddressing(const polyMesh& mesh) const;
+
+        //- Return the patch face to edge addressing
+	    const labelList& patchAddressing(const primitivePatch& patch) const;
 
         //- Calculate the averaged field and return true if successful
         template<class Type>

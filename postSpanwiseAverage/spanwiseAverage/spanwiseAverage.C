@@ -26,26 +26,28 @@ License
 \*---------------------------------------------------------------------------*/
 
 #include "spanwiseAverage.H"
-#include "volFields.H"
 #include "meshStructure.H"
 #include "globalIndex.H"
+#include "polyPatch.H"
+#include "pointField.H"
+
 // * * * * * * * * * * * * * Private Member Functions  * * * * * * * * * * * //
 
-void Foam::spanwiseAverage::meshAddressing()
+const Foam::meshStructure& Foam::spanwiseAverage::meshAddressing(const polyMesh& mesh) const
 {
     if (!meshStructurePtr_)
     {
-        const polyBoundaryMesh& pbm = mesh_.boundaryMesh();
+        const polyBoundaryMesh& pbm = mesh.boundaryMesh();
 
         // Count
         label sz = 0;
-        sz += pbm[patchID_].size();
+        sz += pbm[sidePatchID_].size();
 
         // Fill
         labelList meshFaces(sz);
         sz = 0;
-        label start = pbm[patchID_].start();
-        label size = pbm[patchID_].size();
+        label start = pbm[sidePatchID_].start();
+        label size = pbm[sidePatchID_].size();
         for (label i = 0; i < size; ++i)
         {
             meshFaces[sz++] = start+i;
@@ -63,8 +65,8 @@ void Foam::spanwiseAverage::meshAddressing()
 
         uindirectPrimitivePatch uip
         (
-            UIndirectList<face>(mesh_.faces(), meshFaces),
-            mesh_.points()
+            UIndirectList<face>(mesh.faces(), meshFaces),
+            mesh.points()
         );
 
         globalFaces_.set(new globalIndex(uip.size()));
@@ -74,7 +76,7 @@ void Foam::spanwiseAverage::meshAddressing()
         (
             new meshStructure
             (
-                mesh_,
+                mesh,
                 uip,
                 globalFaces_(),
                 globalEdges_(),
@@ -82,13 +84,51 @@ void Foam::spanwiseAverage::meshAddressing()
             )
         );
     }
+
+    return *meshStructurePtr_;
 }
 
+const Foam::labelList& Foam::spanwiseAverage::patchAddressing(const primitivePatch& patch) const
+{
+    const edgeList& patchEdge = patch.edges();
+    const pointField& patchPoint = patch.localPoints();
+    const pointField& patchCentre = patch.faceCentres();
+    
+    scalar geoMin = min(patchPoint & averagePatchesDir_);
+    patchSideEdgePtr_.reset(new edgeList());
+    List<vector> patchSideEdgeCentre;
+ 
+    forAll(patchEdge,edgei)
+    {
+        if (!patch.isInternalEdge(edgei))
+	    {
+            if (mag(patchEdge[edgei].unitVec(patchPoint) & averagePatchesDir_) < 1000*SMALL)
+	        {
+                vector edgeCentre = patchEdge[edgei].centre(patchPoint); 
+        	    if (mag((edgeCentre & averagePatchesDir_) - geoMin) < 1000*SMALL)
+	            {
+    		        patchSideEdgePtr_().append(patchEdge[edgei]);
+		            patchSideEdgeCentre.append(edgeCentre);
+		        }
+	        }	
+	    }	
+    }    
 
-const Foam::word Foam::spanwiseAverage::averageName
+    patchFaceToEdgePtr_.reset(new labelList(patchCentre.size())); 
+    forAll(patchCentre,facei)
+    {
+    	List<scalar> disToEdge = mag(patchCentre[facei] - patchSideEdgeCentre);
+        label minIndex = findMin(disToEdge);
+        patchFaceToEdgePtr_()[facei] = minIndex;
+    }
+
+    return *patchFaceToEdgePtr_;
+}
+
+const Foam::word Foam::spanwiseAverage::averageName 
 (
     const word& fieldName
-)
+) const
 {
     return "spanwiseAverage(" + fieldName + ")";
 }
@@ -103,10 +143,23 @@ Foam::spanwiseAverage::spanwiseAverage
 )
 :
     mesh_(mesh),
-    patchID_(mesh.boundaryMesh().findPatchID(dict.get<word>("patchName"))),
-    fieldsName_(dict.get<wordList>("fields"))
+    fieldsName_(dict.get<wordList>("fields")),
+    includeInternal_(dict.subDict("Internal").getOrDefault<bool>("includeInternal",true)),
+    includePatches_(dict.subDict("Patches").getOrDefault<bool>("includePatches",false)),
+    sidePatchID_(),
+    averagePatchesName_(), 
+    averagePatchesDir_()
 {
-    meshAddressing();
+    if (includeInternal_)
+    {
+        sidePatchID_ = mesh.boundaryMesh().findPatchID(dict.subDict("Internal").get<word>("sidePatchName"));
+    }
+    
+    if (includePatches_)
+    {
+        averagePatchesName_ = dict.subDict("Patches").get<wordList>("averagePatchesName");
+        averagePatchesDir_ = dict.subDict("Patches").get<vector>("averagePatchesDir");
+    }
 }
 
 
