@@ -1,10 +1,18 @@
+#Calculate the force coefficient of each Bin based on the forceBin data.
+#The result of the force coefficient in each direction will be written into the corresponding csv file.
+#Writing data to tecplot format is also optinal.
+#The 'forceCombin_all.py' needs to be run before running this program.
+#The file 'forceBinLocate' stores the length of each Bin and the location of the face center contained in the Bin.
+#This file can be obtained by running the post-processing program 'postForceBinLength'
+#Copyright (c) 2022.11.29, Leo Yang.
+
 import csv
 import os
 import re
 import numpy as np
 import linecache
-import matplotlib.pyplot as plt
 from scipy import signal
+import matplotlib.pyplot as plt
 
 def writeBinData2Tecplot(binLocate, time, cdxBin, cdyBin, cdzBin, tecName):
 
@@ -62,7 +70,7 @@ def writeBinData2CSV(binLocate, time, cdxBin, cdyBin, cdzBin, cdxMeanBin, cdyMea
             row.extend(list(cdzBin[i,:]))
             writer.writerow(row)
 
-def calcCDxyz(binData,UInf,SpLength,D,rho):
+def calcCDxyz(binData,UInf,length,D,rho):
     cdx = list()
     cdy = list()
     cdz = list()
@@ -72,16 +80,16 @@ def calcCDxyz(binData,UInf,SpLength,D,rho):
     forceZ = binData[:,2]
 
     for i in range(len(forceX)):
-        cdxi =  2 * forceX[i] / (UInf ** 2 * SpLength * D * rho)
-        cdyi =  2 * forceY[i] / (UInf ** 2 * SpLength * D * rho)
-        cdzi =  2 * forceZ[i] / (UInf ** 2 * SpLength * D * rho)
+        cdxi =  2 * forceX[i] / (UInf ** 2 * length * D * rho)
+        cdyi =  2 * forceY[i] / (UInf ** 2 * length * D * rho)
+        cdzi =  2 * forceZ[i] / (UInf ** 2 * length * D * rho)
         cdx.append(cdxi)
         cdy.append(cdyi)
         cdz.append(cdzi)
 
     return (cdx,cdy,cdz)
 
-def calcBinCdxyz(binNum, data, UInf, SpLength, D, rho):
+def calcBinCdxyz(binNum, data, UInf, binLength, D, rho):
     cdxBin = np.zeros((len(time),binNum))
     cdyBin = np.zeros((len(time),binNum))
     cdzBin = np.zeros((len(time),binNum))
@@ -92,7 +100,7 @@ def calcBinCdxyz(binNum, data, UInf, SpLength, D, rho):
     for i in range(binNum):
         j = 9*i
         binData = data[:,j:j+3]
-        [cdx, cdy, cdz] = calcCDxyz(binData, UInf, SpLength, D, rho)
+        [cdx, cdy, cdz] = calcCDxyz(binData, UInf, binLength[i], D, rho)
         cdxBin[:,i] = cdx
         cdyBin[:,i] = cdy
         cdzBin[:,i] = cdz
@@ -102,7 +110,7 @@ def calcBinCdxyz(binNum, data, UInf, SpLength, D, rho):
 
     return (cdxBin,cdyBin,cdzBin,cdxMeanBin,cdyMeanBin,cdzMeanBin)
 
-def readBinLocate(inputTitle):
+def readBinLocate(inputTitle,binLocateName):
 
     binNum = linecache.getline(inputTitle,2)
     binNum = re.findall(r'\d+',binNum)
@@ -130,7 +138,19 @@ def readBinLocate(inputTitle):
     for i in range(binNum):
         binCenter[i] = (binStart + (i + 0.5)*binDelta)*binDir
 
-    return (binNum,binCenter,binDir)
+    binLength = list()
+    with open(binLocateName, "r") as f:
+        for line in f.readlines():
+            li = line.lstrip()
+            if not li.startswith("#"):
+                ls = line.rstrip('\n')
+                first = ls.split('\t')[0]
+                if first:
+                    binLength.append(float(first))
+
+    binLength = np.array(binLength)
+
+    return (binNum,binCenter,binDir,binLength)
 
 def readData(inputName,startTime,endTime):
 
@@ -168,40 +188,40 @@ def medfiltCDxyz(data,n):
 
 if __name__ == '__main__':
     pwd_root = os.getcwd()
-    D = 1.0         #圆柱直径
-    UInf = 1.0     #入流速度
-    SpLength = 4   #圆柱长度
-    rho = 1.0
-    startTime = 201
+    D = 1.0         #Cylinder diameter
+    UInf = 1.0      #Flow velocity
+    rho = 1.0       #Flow density
+    startTime = 200.1
     endTime = 300
+    writeTec = False
 
     dirPath = os.path.join(pwd_root, '072/forces')
 
     inputData = os.path.join(dirPath, 'forceBin.dat')
     inputTitle = os.path.join(dirPath, 'forceBinTitle.dat')
+    binLocateName = os.path.join(dirPath, 'forceBinLocate')
+
     cdxName = os.path.join(dirPath, 'cdxBin.csv')
     cdyName = os.path.join(dirPath, 'cdyBin.csv')
     cdzName = os.path.join(dirPath, 'cdzBin.csv')
     meanName = os.path.join(dirPath, 'meanBin.csv')
-    tecName = os.path.join(dirPath, 'cdxyzBin.dat')
+    tecName = os.path.join(dirPath, 'cdxyzBinRaw.dat')
 
-    [binNum,binCenter,binDir] = readBinLocate(inputTitle)
+    [binNum,binCenter,binDir,binLength] = readBinLocate(inputTitle,binLocateName)
     [time,data] = readData(inputData,startTime,endTime)
 
-    [cdxBin,cdyBin,cdzBin,cdxMeanBin,cdyMeanBin,cdzMeanBin] = calcBinCdxyz(binNum,data,UInf,SpLength,D,rho)
+    [cdxBin,cdyBin,cdzBin,cdxMeanBin,cdyMeanBin,cdzMeanBin] = calcBinCdxyz(binNum,data,UInf,binLength,D,rho)
     cdxBin = medfiltCDxyz(cdxBin,9)
     cdyBin = medfiltCDxyz(cdyBin,5)
     cdzBin = medfiltCDxyz(cdzBin,5)
 
     binLocate = np.dot(binCenter,binDir)
     writeBinData2CSV(binLocate, time, cdxBin, cdyBin, cdzBin, cdxMeanBin, cdyMeanBin, cdzMeanBin, cdxName, cdyName, cdzName,meanName)
-    #writeBinData2Tecplot(binCenter, binDir, time, cdxBin, cdyBin, cdzBin, tecName)
 
-    #binLocate = np.dot(binCenter,binDir)
-    #x,y = np.meshgrid(time,binLocate)
-    #plt.figure()
-    #plt.contourf(x,y,cdyBin.T)
-    # plt.plot(time,cdyBin[:,10])
-    # plt.plot(time,cdyBin[:,20])
-    # plt.plot(time,cdyBin[:,30])
-    #plt.show()
+    if writeTec:
+        writeBinData2Tecplot(binLocate, time, cdxBin, cdyBin, cdzBin, tecName)
+
+    # x,y = np.meshgrid(time,binLocate)
+    # plt.figure()
+    # plt.contourf(x,y,cdyBin.T)
+    # plt.show()

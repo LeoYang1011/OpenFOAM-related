@@ -1,3 +1,8 @@
+#Extract the data output by the forces function in OpenFOAM and store it in the .dat file.
+#If there are multiple time folders, the data will be automatically merged and sorted by time.
+#Can be used to process force data or forceBin data.
+#Copyright (c) 2022.11.29, Leo Yang.
+
 import os
 import numpy as np
 import linecache
@@ -82,8 +87,8 @@ def findForceFile(dirPath,bin):
 if __name__ == '__main__':
     pwdRoot = os.getcwd()
 
-    bin = False
-    dirPath = os.path.join(pwdRoot, '072/forces')
+    bin = True
+    dirPath = os.path.join(pwdRoot, '062/forces')
 
     if bin:
         titleNum = 11

@@ -1,3 +1,9 @@
+#Calculate the force coefficient based on the force data.
+#The result of the force coefficient in each direction will be written into the corresponding csv file.
+#The spectrum of the lift coefficient is also calculated and written to a csv file.
+#The 'forceCombin_all.py' needs to be run before running this program.
+#Copyright (c) 2022.11.29, Leo Yang.
+
 import csv
 import os
 import matplotlib.pyplot as plt
@@ -14,18 +20,7 @@ def writeFile(time,cdx,cdy,cdz,st,cdxMean,cdyMean,cdzMean,cdyRMS,meanName,cdxyzN
             writer.writerow(row)
 
     cdxyz = np.vstack((time,cdx,cdy,cdz))
-
-    # cdxyz = np.empty(shape=[0, len(time)])
-    # cdxyz = np.append(cdxyz,[time],axis=0)
-    # cdxyz = np.append(cdxyz,[cdx],axis=0)
-    # cdxyz = np.append(cdxyz,[cdy],axis=0)
-    # cdxyz = np.append(cdxyz,[cdz],axis=0)
-
     power = np.vstack((frq,fftCdy))
-
-    # power = np.empty(shape=[0, len(frq)])
-    # power = np.append(power, [frq], axis=0)
-    # power = np.append(power, [fftCdy], axis=0)
 
     np.savetxt(cdxyzName,cdxyz.T,delimiter=',',fmt='%.9f')
     np.savetxt(powerName, power.T, delimiter=',')
@@ -68,7 +63,7 @@ def medfiltCDxyz(cd,n):
 
     return (filtCd)
 
-def calcCDxyz(inputName,startTime,endTime,UInf,SpLength,D):
+def calcCDxyz(inputName,startTime,endTime,UInf,SpLength,D, rho):
     cdx = list()
     cdy = list()
     cdz = list()
@@ -107,9 +102,9 @@ def calcCDxyz(inputName,startTime,endTime,UInf,SpLength,D):
     totalz = totalzOld[np.where(timeOld <= endTime)]
 
     for i in range(len(time)):
-        cdxi =  2 * totalx[i] / (UInf ** 2 * SpLength * D)
-        cdyi =  2 * totaly[i] / (UInf ** 2 * SpLength * D)
-        cdzi =  2 * totalz[i] / (UInf ** 2 * SpLength * D)
+        cdxi =  2 * totalx[i] / (UInf ** 2 * SpLength * D * rho)
+        cdyi =  2 * totaly[i] / (UInf ** 2 * SpLength * D * rho)
+        cdzi =  2 * totalz[i] / (UInf ** 2 * SpLength * D * rho)
         cdx.append(cdxi)
         cdy.append(cdyi)
         cdz.append(cdzi)
@@ -118,21 +113,22 @@ def calcCDxyz(inputName,startTime,endTime,UInf,SpLength,D):
 
 if __name__ == '__main__':
     pwd_root = os.getcwd()
-    D = 1.0         #圆柱直径
-    UInf = 1.0     #入流速度
-    SpLength = 4   #圆柱长度
-    startTime = 50
-    endTime = 200
-    dt = 0.002
+    D = 1.0              #Cylinder diameter
+    UInf = 1.0           #Flow velocity
+    SpLength = 4         #Cylinder length
+    rho = 1.0            #Flow density
+    startTime = 52.458
+    endTime = 235.232
+    dt = 0.002           #Delta time for fft
 
-    dir_path = os.path.join(pwd_root, '062/forces')
+    dir_path = os.path.join(pwd_root, '072/forces')
     inputName = os.path.join(dir_path, 'force.dat')
     cdxyzName = os.path.join(dir_path, 'cdxyz.csv')
     powerName = os.path.join(dir_path, 'power.csv')
     meanName = os.path.join(dir_path, 'mean.csv')
 
-    [time,cdx,cdy,cdz] = calcCDxyz(inputName, startTime, endTime, UInf, SpLength, D)
-    cdxNew = medfiltCDxyz(cdx,5)
+    [time,cdx,cdy,cdz] = calcCDxyz(inputName, startTime, endTime, UInf, SpLength, D, rho)
+    cdxNew = medfiltCDxyz(cdx,5) #Numerical filtering to remove outlier data points (optional)
     cdyNew = medfiltCDxyz(cdy,5)
     [frq,fftCdy,cdyRMS] = powerCl(cdyNew, dt)
 

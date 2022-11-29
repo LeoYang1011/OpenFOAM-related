@@ -1,4 +1,6 @@
-import csv
+#Find the peak moment of lift coefficient
+#Copyright (c) 2022.11.29, Leo Yang.
+
 import os
 import matplotlib.pyplot as plt
 import numpy as np
@@ -22,7 +24,7 @@ def writeClPeak(peakFilePath,peakTime,peakCl):
 
 if __name__ == '__main__':
     pwdRoot = os.getcwd()
-    dirPath = os.path.join(pwdRoot, '062/forces')
+    dirPath = os.path.join(pwdRoot, '072/forces')
     clFilePath = os.path.join(dirPath, 'cdxyz.csv')
     peakFilePath = os.path.join(dirPath, 'clPeak.csv')
 
