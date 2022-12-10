@@ -88,7 +88,7 @@ if __name__ == '__main__':
     pwdRoot = os.getcwd()
 
     bin = True
-    dirPath = os.path.join(pwdRoot, '062/forces')
+    dirPath = os.path.join(pwdRoot, '012/forces')
 
     if bin:
         titleNum = 11

@@ -25,7 +25,16 @@ def writeFile(time,cdx,cdy,cdz,st,cdxMean,cdyMean,cdzMean,cdyRMS,meanName,cdxyzN
     np.savetxt(cdxyzName,cdxyz.T,delimiter=',',fmt='%.9f')
     np.savetxt(powerName, power.T, delimiter=',')
 
-def powerCl(cl,dt):
+def powerCl(time,cl,dt,fftStart,fftEnd):
+    clOld = cl.copy()
+    timeOld = time.copy()
+    time = timeOld[np.where(timeOld >= fftStart)]
+    cl = clOld[np.where(time >= fftStart)]
+
+    clOld = cl.copy()
+    timeOld = time.copy()
+    cl = clOld[np.where(timeOld <= fftEnd)]
+
     n = len(cl)
     k = np.arange(n)
     T = n * dt
@@ -117,11 +126,13 @@ if __name__ == '__main__':
     UInf = 1.0           #Flow velocity
     SpLength = 4         #Cylinder length
     rho = 1.0            #Flow density
-    startTime = 52.458
-    endTime = 235.232
+    startTime = 150
+    endTime = 300
     dt = 0.002           #Delta time for fft
+    fftStart = 156.618
+    fftEnd = 294.54
 
-    dir_path = os.path.join(pwd_root, '072/forces')
+    dir_path = os.path.join(pwd_root, '012/forces')
     inputName = os.path.join(dir_path, 'force.dat')
     cdxyzName = os.path.join(dir_path, 'cdxyz.csv')
     powerName = os.path.join(dir_path, 'power.csv')
@@ -130,7 +141,7 @@ if __name__ == '__main__':
     [time,cdx,cdy,cdz] = calcCDxyz(inputName, startTime, endTime, UInf, SpLength, D, rho)
     cdxNew = medfiltCDxyz(cdx,5) #Numerical filtering to remove outlier data points (optional)
     cdyNew = medfiltCDxyz(cdy,5)
-    [frq,fftCdy,cdyRMS] = powerCl(cdyNew, dt)
+    [frq,fftCdy,cdyRMS] = powerCl(time,cdyNew,dt,fftStart,fftEnd)
 
     st = frq[np.argmax(fftCdy)]
     cdxMean = np.mean(cdx)

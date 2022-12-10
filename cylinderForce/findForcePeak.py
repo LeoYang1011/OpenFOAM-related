@@ -24,11 +24,11 @@ def writeClPeak(peakFilePath,peakTime,peakCl):
 
 if __name__ == '__main__':
     pwdRoot = os.getcwd()
-    dirPath = os.path.join(pwdRoot, '072/forces')
+    dirPath = os.path.join(pwdRoot, '062/forces')
     clFilePath = os.path.join(dirPath, 'cdxyz.csv')
     peakFilePath = os.path.join(dirPath, 'clPeak.csv')
 
-    [time,cl,peakTime,peakCl] = findClPeak(clFilePath,-0.05,2000)
+    [time,cl,peakTime,peakCl] = findClPeak(clFilePath,-0.13,2000)
 
     writeClPeak(peakFilePath,peakTime,peakCl)
 

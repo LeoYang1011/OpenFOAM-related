@@ -195,7 +195,7 @@ if __name__ == '__main__':
     endTime = 300
     writeTec = False
 
-    dirPath = os.path.join(pwd_root, '072/forces')
+    dirPath = os.path.join(pwd_root, '012/forces')
 
     inputData = os.path.join(dirPath, 'forceBin.dat')
     inputTitle = os.path.join(dirPath, 'forceBinTitle.dat')
