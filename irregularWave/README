@@ -1,0 +1,3 @@
+1. Copy the files in the common, waveAlpha and waveVelocity to the corresponding folders in the src directory of olaFlow, and recompile olaFlow.
+2. Run the python program to generate the control parameter file of traget irregular wave.
+3. Copy the wavedict file and control parameter file to the constant directory of the simulation case, and run olaFlow.
